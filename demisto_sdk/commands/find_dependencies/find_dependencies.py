@@ -2,12 +2,13 @@ import glob
 import json
 import os
 import sys
+from copy import deepcopy
 from distutils.version import LooseVersion
 
 import click
 import networkx as nx
 from demisto_sdk.commands.common import constants
-from demisto_sdk.commands.common.tools import print_error
+from demisto_sdk.commands.common.tools import print_error, print_warning
 from demisto_sdk.commands.create_id_set.create_id_set import IDSetCreator
 
 MINIMUM_DEPENDENCY_VERSION = LooseVersion('6.0.0')
@@ -876,7 +877,7 @@ class PackDependencies:
         pack_items['widgets'] = PackDependencies._search_for_pack_items(pack_id, id_set['Widgets'])
 
         if not sum(pack_items.values(), []):
-            raise ValueError(f"Couldn't find any items for pack '{pack_id}'. make sure your spelling is correct.")
+            print_warning(f"Couldn't find any items for pack '{pack_id}'. make sure your spelling is correct.")
 
         return pack_items
 
@@ -965,6 +966,52 @@ class PackDependencies:
         )
 
         return pack_dependencies
+
+    @staticmethod
+    def build_all_dependencies_graph(pack_ids, id_set, verbose_file, exclude_ignored_dependencies=True):
+        """
+        Builds all level of dependencies and returns dependency graph for all packs
+
+        Args:
+            pack_ids (list): pack ids, currently pack folder names is in use.
+            id_set (dict): id set json.
+            verbose_file (VerboseFile): path to dependency explanations file.
+            exclude_ignored_dependencies (bool): Determines whether to include unsupported dependencies or not.
+
+        Returns:
+            DiGraph: all dependencies of given packs.
+        """
+        dependency_graph = nx.DiGraph()
+        for pack in pack_ids:
+            dependency_graph.add_node(pack, mandatory_for=[])
+        for pack in dependency_graph.nodes():
+            dependencies = PackDependencies._find_pack_dependencies(
+                    pack, id_set, verbose_file=verbose_file, exclude_ignored_dependencies=exclude_ignored_dependencies)
+            for dependency_name, is_mandatory in dependencies:
+                if dependency_name == pack:
+                    continue
+                if dependency_name not in dependency_graph:
+                    dependency_graph.add_node(dependency_name, mandatory_for=[])
+                dependency_graph.add_edge(pack, dependency_name)
+                if is_mandatory:
+                    dependency_graph.nodes()[dependency_name]['mandatory_for'].append(pack)
+        return dependency_graph
+
+    @staticmethod
+    def get_dependencies_subgraph_by_dfs(dependencies_graph, source_pack):
+        """
+        Generates a copy of the graph using DFS that starts with source_pack as source
+        Args:
+            dependencies_graph (DiGraph): A graph that represents the dependencies of all packs
+            source_pack (str): The name of the pack that should be considered as source for the DFS algorithm
+
+        Returns:
+            DiGraph: The DFS sub graph with source_pack as source
+        """
+        dfs_edges = list(nx.edge_dfs(dependencies_graph, source_pack))
+        subgraph_from_edges = dependencies_graph.edge_subgraph(dfs_edges)
+        # We need to copy the graph so that we can modify it's content without any modifications to the original graph
+        return deepcopy(subgraph_from_edges)
 
     @staticmethod
     def build_dependency_graph(pack_id, id_set, verbose_file, exclude_ignored_dependencies=True):
