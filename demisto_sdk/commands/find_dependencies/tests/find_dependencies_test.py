@@ -1,7 +1,7 @@
 import json
 import os
-import networkx as nx
 
+import networkx as nx
 import pytest
 from demisto_sdk.commands.common.git_tools import git_path
 from demisto_sdk.commands.find_dependencies.find_dependencies import (
@@ -1122,7 +1122,7 @@ def test_search_packs_by_items_names_or_ids(item_names, section_name, expected_r
 class TestDependencyGraph:
     @pytest.mark.parametrize('source_node, expected_nodes_in, expected_nodes_out',
                              [('1', ['1', '2', '3'], ['4']),
-                             ('2', ['2', '3'], ['4', '1'])]
+                              ('2', ['2', '3'], ['4', '1'])]
                              )
     def test_get_dependencies_subgraph_by_dfs(self, source_node, expected_nodes_in, expected_nodes_out):
         """

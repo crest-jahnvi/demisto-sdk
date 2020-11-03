@@ -8,7 +8,7 @@ from distutils.version import LooseVersion
 import click
 import networkx as nx
 from demisto_sdk.commands.common import constants
-from demisto_sdk.commands.common.tools import print_error, print_warning
+from demisto_sdk.commands.common.tools import print_error
 from demisto_sdk.commands.create_id_set.create_id_set import IDSetCreator
 
 MINIMUM_DEPENDENCY_VERSION = LooseVersion('6.0.0')
@@ -875,9 +875,11 @@ class PackDependencies:
         pack_items['classifiers'] = PackDependencies._search_for_pack_items(pack_id, id_set['Classifiers'])
         pack_items['mappers'] = PackDependencies._search_for_pack_items(pack_id, id_set['Mappers'])
         pack_items['widgets'] = PackDependencies._search_for_pack_items(pack_id, id_set['Widgets'])
+        pack_items['dashboards'] = PackDependencies._search_for_pack_items(pack_id, id_set['Dashboards'])
+        pack_items['reports'] = PackDependencies._search_for_pack_items(pack_id, id_set['Reports'])
 
         if not sum(pack_items.values(), []):
-            print_warning(f"Couldn't find any items for pack '{pack_id}'. make sure your spelling is correct.")
+            raise ValueError(f"Couldn't find any items for pack '{pack_id}'. make sure your spelling is correct.")
 
         return pack_items
 
@@ -986,7 +988,7 @@ class PackDependencies:
             dependency_graph.add_node(pack, mandatory_for=[])
         for pack in dependency_graph.nodes():
             dependencies = PackDependencies._find_pack_dependencies(
-                    pack, id_set, verbose_file=verbose_file, exclude_ignored_dependencies=exclude_ignored_dependencies)
+                pack, id_set, verbose_file=verbose_file, exclude_ignored_dependencies=exclude_ignored_dependencies)
             for dependency_name, is_mandatory in dependencies:
                 if dependency_name == pack:
                     continue
