@@ -1121,8 +1121,8 @@ def test_search_packs_by_items_names_or_ids(item_names, section_name, expected_r
 
 class TestDependencyGraph:
     @pytest.mark.parametrize('source_node, expected_nodes_in, expected_nodes_out',
-                             [('1', ['1', '2', '3'], ['4']),
-                              ('2', ['2', '3'], ['4', '1'])]
+                             [('pack1', ['pack1', 'pack2', 'pack3'], ['pack4']),
+                              ('pack2', ['pack2', 'pack3'], ['pack4', 'pack1'])]
                              )
     def test_get_dependencies_subgraph_by_dfs(self, source_node, expected_nodes_in, expected_nodes_out):
         """
@@ -1135,17 +1135,44 @@ class TestDependencyGraph:
             - Assert all nodes that are not reachable from the source are not in the subgraph
         """
         graph = nx.DiGraph()
-        graph.add_node('1')
-        graph.add_node('2')
-        graph.add_node('3')
-        graph.add_node('4')
-        graph.add_edge('1', '2')
-        graph.add_edge('2', '3')
+        graph.add_node('pack1')
+        graph.add_node('pack2')
+        graph.add_node('pack3')
+        graph.add_node('pack4')
+        graph.add_edge('pack1', 'pack2')
+        graph.add_edge('pack2', 'pack3')
         dfs_graph = PackDependencies.get_dependencies_subgraph_by_dfs(graph, source_node)
         for i in expected_nodes_in:
             assert i in dfs_graph.nodes()
         for i in expected_nodes_out:
             assert i not in dfs_graph.nodes()
+
+    def test_build_all_dependencies_graph(self, id_set, mocker):
+        def mock_find_pack_dependencies(pack_id, *_, **__):
+            dependencies = {'pack1': [('pack2', True), ('pack3', False)],
+                            'pack2': [('pack3', False)],
+                            'pack3': [],
+                            'pack4': []}
+            return dependencies[pack_id]
+        mocker.patch(
+            'demisto_sdk.commands.find_dependencies.find_dependencies.PackDependencies._find_pack_dependencies',
+            side_effect=mock_find_pack_dependencies
+        )
+        pack_ids = ['pack1', 'pack2', 'pack3', 'pack4']
+        dependency_graph = PackDependencies.build_all_dependencies_graph(pack_ids, {}, VerboseFile(''))
+
+        # Asserting Dependencies
+        assert [n for n in dependency_graph.neighbors('pack1')] == ['pack2', 'pack3']
+        assert [n for n in dependency_graph.neighbors('pack2')] == ['pack3']
+        assert [n for n in dependency_graph.neighbors('pack3')] == []
+        assert [n for n in dependency_graph.neighbors('pack4')] == []
+
+        # Asserting mandatory dependencies
+        nodes = dependency_graph.nodes(data=True)
+        assert nodes['pack1']['mandatory_for_packs'] == []
+        assert nodes['pack2']['mandatory_for_packs'] == ['pack1']
+        assert nodes['pack1']['mandatory_for_packs'] == []
+        assert nodes['pack1']['mandatory_for_packs'] == []
 
     def test_build_dependency_graph(self, id_set):
         pack_name = "ImpossibleTraveler"
